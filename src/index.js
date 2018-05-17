@@ -43,6 +43,7 @@ import TabbarItem from './components/tabbar-item'
 import Textarea from './components/textarea'
 import Toast from './components/toast'
 import TopTips from './components/top-tips'
+import Uploader from './components/uploader'
 
 const version = '2.1.2'
 const components = [
@@ -83,7 +84,8 @@ const components = [
   Switch,
   Tabbar,
   TabbarItem,
-  Textarea
+  Textarea,
+  Uploader
 ]
 
 const install = (Vue, config = {}) => {
@@ -153,7 +155,8 @@ export {
   TabbarItem,
   Textarea,
   Toast,
-  TopTips
+  TopTips,
+  Uploader
 }
 
 export default {
