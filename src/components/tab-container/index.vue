@@ -1,143 +1,181 @@
 <template>
   <div
-    @touchstart="onTouchstart"
-    @mousedown="onTouchstart"
-    @touchmove="onTouchmove"
-    @mousemove="onTouchmove"
-    @touchend="onTouchend"
-    @mouseup="onTouchend"
     class="wv-tab-container"
-  >
+    @touchstart="onTouchstart"
+    @touchmove="onTouchmove"
+    @touchend="onTouchend"
+    @touchcancel="onTouchend">
     <div
-      ref="wrap"
-      class="wv-tab-container-wrap"
-      @transitionend.once="onTransitionend"
+      :style="wrapperStyle"
+      class="wv-tab-container__wrapper"
     >
-      <slot />
+      <slot/>
     </div>
   </div>
 </template>
 
 <script>
-import { create } from '../../utils'
+import { create, getTouch } from '../../utils'
 
 export default create({
   name: 'wv-tab-container',
 
   props: {
-    value: {},
-    swipeable: Boolean
+    height: Number,
+    defaultIndex: {
+      type: Number,
+      default: 0
+    },
+    duration: {
+      type: Number,
+      default: 500
+    },
+    noDragWhenSingle: {
+      type: Boolean,
+      default: true
+    }
   },
 
   data () {
     return {
-      start: { x: 0, y: 0 },
-      swiping: false,
-      activeItems: [],
-      pageWidth: 0,
-      limitWidth: 0,
-      currentActive: this.value
+      width: 0,
+      offset: 0,
+      startX: 0,
+      startY: 0,
+      active: 0,
+      deltaX: 0,
+      pages: [],
+      direction: '',
+      currentDuration: 0
     }
   },
 
   mounted () {
-    if (!this.swipeable) return
-
-    this.wrap = this.$refs.wrap
-    this.pageWidth = this.wrap.clientWidth
-    this.limitWidth = this.pageWidth / 4
+    this.initialize()
   },
 
-  methods: {
-    onTransitionend () {
-      this.wrap.classList.add('swipe-transition')
-      this.swipeMove(-this.index * this.pageWidth)
-
-      this.wrap.classList.remove('swipe-transition')
-      this.wrap.style.webkitTransform = ''
-      this.swiping = false
-      this.index = null
-    },
-
-    swipeLeaveTransition (lastIndex = 0) {
-      if (typeof this.index !== 'number') {
-        this.index = this.$children.findIndex(child => child.id === this.currentActive)
-        this.swipeMove(-lastIndex * this.pageWidth)
-      }
-    },
-
-    swipeMove (offset) {
-      this.wrap.style.webkitTransform = `translate3d(${offset}px, 0, 0)`
-      this.swiping = true
-    },
-
-    onTouchstart (evt) {
-      if (!this.swipeable) return
-
-      evt = evt.changedTouches ? evt.changedTouches[0] : evt
-      this.dragging = true
-      this.start.x = evt.pageX
-      this.start.y = evt.pageY
-    },
-
-    onTouchmove (evt) {
-      if (!this.dragging) return
-      let swiping
-      const e = evt.changedTouches ? evt.changedTouches[0] : evt
-      const offsetTop = e.pageY - this.start.y
-      const offsetLeft = e.pageX - this.start.x
-      const y = Math.abs(offsetTop)
-      const x = Math.abs(offsetLeft)
-      swiping = !(x < 5 || (x >= 5 && y >= x * 1.73))
-      if (!swiping) return
-
-      evt.preventDefault()
-
-      const len = this.$children.length - 1
-      const index = this.$children.findIndex(child => child.id === this.currentActive)
-
-      const currentPageOffset = index * this.pageWidth
-      const offset = offsetLeft - currentPageOffset
-      const absOffset = Math.abs(offset)
-      if (absOffset > len * this.pageWidth ||
-        (offset > 0 && offset < this.pageWidth)) {
-        this.swiping = false
-        return
-      }
-      this.offsetLeft = offsetLeft
-      this.index = index
-
-      this.swipeMove(offset)
-    },
-
-    onTouchend () {
-      if (!this.swiping) return
-      this.dragging = false
-      const direction = this.offsetLeft > 0 ? -1 : 1
-      const isChange = Math.abs(this.offsetLeft) > this.limitWidth
-      if (isChange) {
-        this.index += direction
-        const child = this.$children[this.index]
-        if (child) {
-          this.currentActive = child.id
-          return
-        }
-      }
-      this.swipeLeaveTransition()
-    }
+  destroyed () {
+    clearTimeout(this.timer)
   },
 
   watch: {
-    value (val) {
-      this.currentActive = val
+    pages () {
+      this.initialize()
     },
 
-    currentActive (val, oldValue) {
-      this.$emit('input', val)
-      if (!this.swipeable) return
+    defaultIndex () {
+      this.initialize()
+    }
+  },
 
-      const lastIndex = this.$children.findIndex(child => child.id === oldValue)
-      this.swipeLeaveTransition(lastIndex)
+  computed: {
+    count () {
+      return this.pages.length
+    },
+
+    wrapperStyle () {
+      let ret = {
+        paddingLeft: this.count > 1 ? this.width + 'px' : 0,
+        width: this.count > 1 ? (this.count + 2) * this.width + 'px' : '100%',
+        transitionDuration: `${this.currentDuration}ms`,
+        transform: `translate3d(${this.offset}px, 0, 0)`
+      }
+
+      if (this.height) {
+        ret.height = this.height + 'px'
+      }
+
+      return ret
+    }
+  },
+
+  methods: {
+    initialize () {
+      clearTimeout(this.timer)
+      this.width = this.$el.getBoundingClientRect().width
+      this.active = this.defaultIndex
+      this.currentDuration = 0
+      this.offset = this.count > 1 ? -this.width * (this.active + 1) : 0
+      this.pages.forEach(swipe => {
+        swipe.offset = 0
+      })
+    },
+
+    onTouchstart (event) {
+      if (this.count === 1 && this.noDragWhenSingle) {
+        return
+      }
+
+      clearTimeout(this.timer)
+      const touch = getTouch(event)
+
+      this.deltaX = 0
+      this.direction = ''
+      this.currentDuration = 0
+      this.startX = touch.clientX
+      this.startY = touch.clientY
+
+      if (this.active <= -1) {
+        this.move(this.count)
+      }
+      if (this.active >= this.count) {
+        this.move(-this.count)
+      }
+    },
+
+    onTouchmove (event) {
+      event.preventDefault()
+
+      const touch = getTouch(event)
+
+      this.deltaX = touch.clientX - this.startX
+      const deltaY = touch.clientY - this.startY
+
+      if (this.count === 1) {
+        if (this.noDragWhenSingle) return
+
+        this.offset = this.range(this.deltaX, [-20, 20])
+      } else if (this.count > 1 && Math.abs(this.deltaX) > Math.abs(deltaY)) {
+        this.move(0, this.range(this.deltaX, [-this.width, this.width]))
+      }
+    },
+
+    onTouchend () {
+      if (this.count === 1) {
+        if (this.noDragWhenSingle) return
+
+        this.offset = 0
+        this.currentDuration = this.duration
+      } else {
+        if (this.deltaX) {
+          this.move(Math.abs(this.deltaX) > 50 ? (this.deltaX > 0 ? -1 : 1) : 0)
+          this.currentDuration = this.duration
+        }
+      }
+    },
+
+    move (move = 0, offset = 0) {
+      const {active, count, pages, deltaX, width} = this
+
+      if (move) {
+        if (active === -1) {
+          pages[count - 1].offset = 0
+        }
+        pages[0].offset = active === count - 1 && move > 0 ? count * width : 0
+
+        this.active += move
+      } else {
+        if (active === 0) {
+          pages[count - 1].offset = deltaX > 0 ? -count * width : 0
+        } else if (active === count - 1) {
+          pages[0].offset = deltaX < 0 ? count * width : 0
+        }
+      }
+      this.offset = offset - (this.active + 1) * this.width
+    },
+
+    range (num, arr) {
+      return Math.min(Math.max(num, arr[0]), arr[1])
     }
   }
 })
@@ -147,13 +185,11 @@ export default create({
   .wv-tab-container {
     overflow: hidden;
     position: relative;
+    user-select: none;
 
-    &-wrap {
-      display: flex;
-    }
-
-    .swipe-transition {
-      transition: all 150ms ease-in-out;
+    &__wrapper {
+      height: 100%;
+      overflow: hidden;
     }
   }
 </style>

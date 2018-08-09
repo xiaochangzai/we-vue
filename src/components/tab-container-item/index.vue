@@ -1,8 +1,5 @@
 <template>
-  <div
-    v-show="$parent.swiping || id === $parent.currentActive"
-    class="wv-tab-container-item"
-  >
+  <div class="wv-tab-container-item" :style="style">
     <slot />
   </div>
 </template>
@@ -13,15 +10,34 @@ import { create } from '../../utils'
 export default create({
   name: 'wv-tab-container-item',
 
-  props: {
-    id: [String, Number]
+  data () {
+    return {
+      offset: 0
+    }
+  },
+
+  computed: {
+    style () {
+      return {
+        width: this.$parent.width + 'px',
+        transform: `translate3d(${this.offset}px, 0, 0)`
+      }
+    }
+  },
+
+  beforeCreate () {
+    this.$parent && this.$parent.pages.push(this)
+  },
+
+  destroyed () {
+    this.$parent && this.$parent.pages.splice(this.$parent.pages.indexOf(this), 1)
   }
 })
 </script>
 
 <style scoped lang="scss">
   .wv-tab-container-item {
-    flex-shrink: 0;
-    width: 100%;
+    float: left;
+    height: 100%;
   }
 </style>
