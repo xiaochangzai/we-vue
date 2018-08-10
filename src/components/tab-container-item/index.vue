@@ -39,5 +39,6 @@ export default create({
   .wv-tab-container-item {
     float: left;
     height: 100%;
+    background-color: #f00; // todo
   }
 </style>

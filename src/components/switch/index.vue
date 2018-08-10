@@ -198,7 +198,7 @@ export default create({
       }
 
       .thumb {
-        transform: translateX(20px);
+        transform: translate3d(20px, 0, 0);
       }
     }
   }

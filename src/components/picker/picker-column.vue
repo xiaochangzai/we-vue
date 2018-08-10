@@ -248,6 +248,6 @@ export default create({
 
 <style scoped lang="scss">
   .wv-picker-column-divider {
-    transform: translateY(106px);
+    transform: translate3d(0, 106px, 0);
   }
 </style>
